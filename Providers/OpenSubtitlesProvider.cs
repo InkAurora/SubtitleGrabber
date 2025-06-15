@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -76,10 +75,10 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             DebugLog("[DEBUG] Constructor called - OpenSubtitles Grabber");
             DebugLog("[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
-            _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");        }
+            _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");        }        /// <inheritdoc />
+        public string Name => "OpenSubtitles Grabber";
 
-        /// <inheritdoc />
-        public string Name => "OpenSubtitles Grabber";        private static void DebugLog(string message)
+        private static void DebugLog(string message)
         {
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
             if (config?.EnableDebugLogging == true)
@@ -515,143 +514,8 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
 
             // If it's already a 3-letter code, use it as-is
             if (language.Length == 3)
-                return language.ToLowerInvariant();
-
-            // Default to English
+                return language.ToLowerInvariant();            // Default to English
             return "eng";
-        }
-
-        private string ExtractSubtitleName(HtmlNode row, string rowText, string fallbackName)
-        {
-            try
-            {
-                DebugLog($"[DEBUG] ExtractSubtitleName - Analyzing HTML structure");
-                
-                // Debug: Let's see what img tags we have and their attributes
-                var allImgs = row.SelectNodes(".//img");
-                if (allImgs != null)
-                {
-                    DebugLog($"[DEBUG] Found {allImgs.Count} img tags in row");
-                    for (int i = 0; i < Math.Min(5, allImgs.Count); i++)
-                    {
-                        var title = allImgs[i].GetAttributeValue("title", "");
-                        var alt = allImgs[i].GetAttributeValue("alt", "");
-                        var src = allImgs[i].GetAttributeValue("src", "");
-                        DebugLog($"[DEBUG] Img {i}: title='{title}', alt='{alt}', src='{src.Substring(0, Math.Min(50, src.Length))}'");
-                    }
-                }
-                else
-                {
-                    DebugLog($"[DEBUG] No img tags found in row");
-                }
-                
-                // Debug: Let's see what anchor tags we have
-                var allAnchors = row.SelectNodes(".//a");
-                if (allAnchors != null)
-                {
-                    DebugLog($"[DEBUG] Found {allAnchors.Count} anchor tags in row");
-                    for (int i = 0; i < Math.Min(3, allAnchors.Count); i++)
-                    {
-                        var href = allAnchors[i].GetAttributeValue("href", "");
-                        var text = allAnchors[i].InnerText?.Trim() ?? "";
-                        DebugLog($"[DEBUG] Anchor {i}: href='{href.Substring(0, Math.Min(50, href.Length))}', text='{text.Substring(0, Math.Min(50, text.Length))}'");
-                    }
-                }
-                
-                // Try different variations of the img selector
-                var patterns = new[]
-                {
-                    ".//img[@title='Subtitle filename']",
-                    ".//img[contains(@title, 'Subtitle')]",
-                    ".//img[contains(@title, 'filename')]",
-                    ".//img[contains(@alt, 'filename')]",
-                    ".//img[contains(@alt, 'Subtitle')]"
-                };
-                
-                foreach (var pattern in patterns)
-                {
-                    var imgNode = row.SelectSingleNode(pattern);
-                    if (imgNode != null)
-                    {
-                        DebugLog($"[DEBUG] Found img with pattern '{pattern}'");
-                        
-                        // Get the parent anchor tag
-                        var parentAnchor = imgNode.ParentNode;
-                        if (parentAnchor != null && parentAnchor.Name.ToLower() == "a")
-                        {
-                            var anchorText = parentAnchor.InnerText?.Trim();
-                            DebugLog($"[DEBUG] Found parent anchor text: '{anchorText}'");
-                            
-                            if (!string.IsNullOrEmpty(anchorText))
-                            {
-                                // Remove the file size info (e.g., "(103909bytes)")
-                                var cleanedText = Regex.Replace(anchorText, @"\s*\(\d+bytes?\)\s*", "", RegexOptions.IgnoreCase);
-                                
-                                // Remove the .srt extension
-                                cleanedText = Regex.Replace(cleanedText, @"\.srt$", "", RegexOptions.IgnoreCase);
-                                
-                                cleanedText = cleanedText.Trim();
-                                
-                                if (!string.IsNullOrEmpty(cleanedText) && cleanedText.Length > 5)
-                                {
-                                    DebugLog($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
-                                    return cleanedText;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            DebugLog($"[DEBUG] Parent is not an anchor tag or is null: {parentAnchor?.Name}");
-                        }
-                    }
-                }
-
-                DebugLog($"[DEBUG] HTML extraction failed with all patterns, returning Unknown Subtitle");
-                return "Unknown Subtitle";
-            }
-            catch (Exception ex)
-            {
-                DebugLog($"[DEBUG] Error extracting subtitle name: {ex.Message}");
-                return "Unknown Subtitle";
-            }
-        }
-
-        private string CleanSubtitleName(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return string.Empty;
-
-            DebugLog($"[DEBUG] CleanSubtitleName - input: '{name}'");
-            
-            // For release names like "Shrek.2.2004.720p.BluRay.x264.YIFY", just return as-is
-            // Only do minimal cleanup
-            var cleaned = name.Trim();
-            
-            // Remove any HTML remnants or problematic chars
-            cleaned = Regex.Replace(cleaned, @"[<>\""]", "");
-            
-            DebugLog($"[DEBUG] CleanSubtitleName - output: '{cleaned}'");
-            return cleaned;
-        }
-
-        private bool IsCommonTableData(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return true;
-                
-            // Check for common table data that's not movie titles
-            var commonPatterns = new[]
-            {
-                @"^\d+$", // just numbers
-                @"^\d{4}-\d{2}-\d{2}$", // dates
-                @"^(English|Spanish|French|German|Italian|Portuguese|Russian|Chinese)$", // languages
-                @"^\d+CD$", // CD count
-                @"^(Download|Watch|Online|Subtitles?)$", // common words
-                @"^\d+\.\d+$", // ratings like 8.5
-                @"^(yes|no|true|false)$" // boolean values
-            };
-            
-            return commonPatterns.Any(pattern => Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase));
         }
 
         private bool IsZipFile(byte[] content)
