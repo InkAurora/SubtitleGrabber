@@ -70,7 +70,10 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             
-            Console.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
+            Console.WriteLine("[DEBUG] ==========================================");
+            Console.WriteLine("[DEBUG] OPENSUBTITLES PROVIDER CREATED!");
+            Console.WriteLine("[DEBUG] Constructor called - OpenSubtitles Grabber");
+            Console.WriteLine("[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
             _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");
         }
@@ -91,7 +94,11 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         /// <inheritdoc />
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken cancellationToken)
         {
+            Console.WriteLine($"[DEBUG] ==========================================");
+            Console.WriteLine($"[DEBUG] SUBTITLE SEARCH STARTED");
             Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.Search called for: {request.MediaPath}");
+            Console.WriteLine($"[DEBUG] Language: {request.Language}");
+            Console.WriteLine($"[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine($"[DEBUG] OpenSubtitlesProvider.Search called for: {request.MediaPath}");
             
             try
@@ -108,15 +115,34 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 }
 
                 // Remove duplicates and limit results
-                return searchResults
+                var finalResults = searchResults
                     .GroupBy(s => s.Id)
                     .Select(g => g.First())
                     .Take(config.MaxSearchResults)
                     .ToList();
+
+                Console.WriteLine($"[DEBUG] ==========================================");
+                Console.WriteLine($"[DEBUG] SUBTITLE SEARCH COMPLETED");
+                Console.WriteLine($"[DEBUG] Total found: {searchResults.Count}");
+                Console.WriteLine($"[DEBUG] After deduplication: {finalResults.Count}");
+                Console.WriteLine($"[DEBUG] Final results:");
+                for (int i = 0; i < finalResults.Count; i++)
+                {
+                    Console.WriteLine($"[DEBUG] {i + 1}. ID: {finalResults[i].Id}");
+                    Console.WriteLine($"[DEBUG]    Name: {finalResults[i].Name}");
+                    Console.WriteLine($"[DEBUG]    Provider: {finalResults[i].ProviderName}");
+                }
+                Console.WriteLine($"[DEBUG] ==========================================");
+
+                return finalResults;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.Search error: {ex.Message}");
+                Console.WriteLine($"[DEBUG] ==========================================");
+                Console.WriteLine($"[DEBUG] SUBTITLE SEARCH FAILED");
+                Console.WriteLine($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[DEBUG] Stack Trace: {ex.StackTrace}");
+                Console.WriteLine($"[DEBUG] ==========================================");
                 _logger.LogError(ex, "Error searching for subtitles");
                 return new List<RemoteSubtitleInfo>();
             }
@@ -125,88 +151,142 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         /// <inheritdoc />
         public async Task<SubtitleResponse> GetSubtitles(string id, CancellationToken cancellationToken)
         {
+            Console.WriteLine($"[DEBUG] ==========================================");
+            Console.WriteLine($"[DEBUG] DOWNLOAD BUTTON CLICKED!");
             Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.GetSubtitles called for ID: {id}");
+            Console.WriteLine($"[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine($"[DEBUG] OpenSubtitlesProvider.GetSubtitles called for ID: {id}");
             
             try
             {
+                // Decode the simple ID format back to a download URL
+                string downloadUrl;
+                string subtitleLanguage = "en"; // default
+                
+                if (id.StartsWith("srt-") && id.Contains("-"))
+                {
+                    // Parse simple ID format: "srt-en-123456"
+                    var parts = id.Split('-');
+                    if (parts.Length >= 3)
+                    {
+                        subtitleLanguage = parts[1];
+                        var subtitleId = parts[2];
+                        downloadUrl = $"https://dl.opensubtitles.org/en/download/sub/{subtitleId}";
+                        Console.WriteLine($"[DEBUG] Decoded simple ID:");
+                        Console.WriteLine($"[DEBUG] - Language: {subtitleLanguage}");
+                        Console.WriteLine($"[DEBUG] - Subtitle ID: {subtitleId}");
+                        Console.WriteLine($"[DEBUG] - Download URL: {downloadUrl}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[DEBUG] ERROR: Invalid simple ID format: {id}");
+                        throw new ArgumentException($"Invalid subtitle ID format: {id}");
+                    }
+                }
+                else if (id.StartsWith("http"))
+                {
+                    // If it's already a full URL, use it directly
+                    downloadUrl = id;
+                    subtitleLanguage = "en"; // default when no language in URL
+                    Console.WriteLine($"[DEBUG] Using full URL directly: {downloadUrl}");
+                }
+                else
+                {
+                    Console.WriteLine($"[DEBUG] ERROR: Unrecognized ID format: {id}");
+                    throw new ArgumentException($"Unrecognized subtitle ID format: {id}");
+                }
+            
                 using var httpClient = _httpClientFactory.CreateClient();
                 httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
                 httpClient.DefaultRequestHeaders.Add("Referer", "https://www.opensubtitles.org/");
                 
-                Console.WriteLine($"[DEBUG] Attempting to download: {id}");
-                var response = await httpClient.GetAsync(id, cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[DEBUG] Download response status: {response.StatusCode}");
+                Console.WriteLine($"[DEBUG] Step 1: HTTP client configured");
+                Console.WriteLine($"[DEBUG] Step 2: Attempting to download from URL: {downloadUrl}");
+                
+                var response = await httpClient.GetAsync(downloadUrl, cancellationToken).ConfigureAwait(false);
+                
+                Console.WriteLine($"[DEBUG] Step 3: HTTP Response received");
+                Console.WriteLine($"[DEBUG] - Status Code: {response.StatusCode}");
+                Console.WriteLine($"[DEBUG] - Status: {(response.IsSuccessStatusCode ? "SUCCESS" : "FAILED")}");
+                Console.WriteLine($"[DEBUG] - Reason Phrase: {response.ReasonPhrase}");
                 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[DEBUG] Download failed with status: {response.StatusCode}");
-                    throw new HttpRequestException($"Failed to download subtitle: {response.StatusCode}");
+                    Console.WriteLine($"[DEBUG] ERROR: Download failed with status: {response.StatusCode}");
+                    throw new HttpRequestException($"Failed to download subtitle: {response.StatusCode} - {response.ReasonPhrase}");
                 }
 
-                var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
-                var contentLength = response.Content.Headers.ContentLength ?? 0;
-                Console.WriteLine($"[DEBUG] Content type: {contentType}, Length: {contentLength}");
-
-                // Read the response content
                 var content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[DEBUG] Downloaded content size: {content.Length}");
-
-                // Check if this is a zip file
-                if (contentType.Contains("zip") || id.Contains(".zip") || IsZipFile(content))
+                Console.WriteLine($"[DEBUG] Step 4: Content downloaded - size: {content.Length} bytes");
+                
+                // Check if this is a ZIP file and extract subtitle content
+                byte[] subtitleContent;
+                if (IsZipFile(content))
                 {
-                    Console.WriteLine("[DEBUG] Processing zip file");
-                    
-                    // Extract subtitle from zip
-                    var subtitleContent = ExtractSubtitleFromZip(content);
-                    if (subtitleContent != null)
+                    Console.WriteLine($"[DEBUG] Step 5a: Content is ZIP file - extracting subtitle");
+                    var extractedContent = ExtractSubtitleFromZip(content);
+                    if (extractedContent == null)
                     {
-                        Console.WriteLine($"[DEBUG] Extracted subtitle from zip, size: {subtitleContent.Length}");
-                        return new SubtitleResponse
-                        {
-                            Language = "en", // This should be detected from the subtitle request
-                            Stream = new MemoryStream(subtitleContent),
-                            Format = DetectSubtitleFormat(subtitleContent)
-                        };
+                        Console.WriteLine($"[DEBUG] ERROR: Failed to extract subtitle from ZIP");
+                        throw new InvalidOperationException("Failed to extract subtitle from ZIP file");
                     }
-                    else
-                    {
-                        Console.WriteLine("[DEBUG] Failed to extract subtitle from zip");
-                        throw new InvalidOperationException("Failed to extract subtitle from zip file");
-                    }
+                    subtitleContent = extractedContent;
+                    Console.WriteLine($"[DEBUG] Step 5b: Successfully extracted subtitle from ZIP - size: {subtitleContent.Length} bytes");
                 }
                 else
                 {
-                    // Direct subtitle file
-                    Console.WriteLine("[DEBUG] Processing direct subtitle file");
-                    
-                    // If it's HTML content, it might be a download page - extract the actual download link
-                    if (contentType.Contains("html"))
-                    {
-                        var htmlContent = Encoding.UTF8.GetString(content);
-                        var actualDownloadUrl = ExtractActualDownloadUrl(htmlContent, id);
-                        
-                        if (!string.IsNullOrEmpty(actualDownloadUrl))
-                        {
-                            Console.WriteLine($"[DEBUG] Found actual download URL: {actualDownloadUrl}");
-                            return await GetSubtitles(actualDownloadUrl, cancellationToken);
-                        }
-                    }
-                    
-                    return new SubtitleResponse
-                    {
-                        Language = "en", // This should be detected from the subtitle request
-                        Stream = new MemoryStream(content),
-                        Format = DetectSubtitleFormat(content)
-                    };
+                    Console.WriteLine($"[DEBUG] Step 5a: Content is direct subtitle file");
+                    subtitleContent = content;
                 }
+                
+                var format = DetectSubtitleFormat(subtitleContent);
+                Console.WriteLine($"[DEBUG] Step 6: Detected subtitle format: {format}");
+
+                Console.WriteLine($"[DEBUG] ==========================================");
+                Console.WriteLine($"[DEBUG] DOWNLOAD COMPLETED SUCCESSFULLY!");
+                Console.WriteLine($"[DEBUG] - Format: {format}");
+                Console.WriteLine($"[DEBUG] - Size: {subtitleContent.Length} bytes");
+                Console.WriteLine($"[DEBUG] - Language: {subtitleLanguage}");
+                Console.WriteLine($"[DEBUG] - Was ZIP: {IsZipFile(content)}");
+                Console.WriteLine($"[DEBUG] ==========================================");
+
+                return new SubtitleResponse
+                {
+                    Language = subtitleLanguage,
+                    Stream = new MemoryStream(subtitleContent),
+                    Format = format
+                };
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.GetSubtitles error: {ex.Message}");
+                Console.WriteLine($"[DEBUG] ==========================================");
+                Console.WriteLine($"[DEBUG] DOWNLOAD FAILED!");
+                Console.WriteLine($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[DEBUG] Stack Trace: {ex.StackTrace}");
+                Console.WriteLine($"[DEBUG] ==========================================");
                 _logger.LogError(ex, "Error downloading subtitle with ID {Id}", id);
                 throw;
             }
+        }
+
+        private string DetectSubtitleFormat(byte[] content)
+        {
+            var text = Encoding.UTF8.GetString(content, 0, Math.Min(1000, content.Length));
+            
+            if (text.Contains("-->") && Regex.IsMatch(text, @"\d{2}:\d{2}:\d{2}"))
+            {
+                return "srt";
+            }
+            if (text.Contains("[Script Info]") || text.Contains("Dialogue:"))
+            {
+                return "ass";
+            }
+            if (text.Contains("{") && text.Contains("}") && Regex.IsMatch(text, @"\{\d+\}"))
+            {
+                return "sub";
+            }
+            
+            return "srt"; // default
         }
 
         private string GetSearchText(SubtitleSearchRequest request)
@@ -261,147 +341,54 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
-                // The new approach: look for table rows that contain subtitle information
-                // Based on the actual HTML structure, we need to find rows with download links
-                var subtitleRows = doc.DocumentNode.SelectNodes("//tr[contains(., 'Download Subtitles Searcher')]") ??
-                                  doc.DocumentNode.SelectNodes("//tr[td and contains(., 'srt')]") ??
-                                  doc.DocumentNode.SelectNodes("//tr[td]");
-                
-                if (subtitleRows == null)
-                {
-                    Console.WriteLine("[DEBUG] No subtitle rows found");
-                    return results;
-                }
-
+                // Parse search results
+                var subtitleRows = doc.DocumentNode.SelectNodes("//tr[@onclick]") ?? new HtmlNodeCollection(null);
                 Console.WriteLine($"[DEBUG] Found {subtitleRows.Count} potential subtitle rows");
                 
-                var processedCount = 0;
-                foreach (var row in subtitleRows)
+                foreach (var row in subtitleRows.Take(config.MaxSearchResults))
                 {
-                    if (processedCount >= config.MaxSearchResults) break;
-
                     try
                     {
+                        // Get the full row text for parsing
                         var rowText = row.InnerText ?? "";
+                        Console.WriteLine($"[DEBUG] Raw row text: '{rowText.Substring(0, Math.Min(200, rowText.Length))}...'");
                         
-                        // Skip rows that don't look like subtitle entries
-                        if (!rowText.Contains("srt") && !rowText.Contains("sub") && !rowText.Contains("vtt")) 
-                            continue;
-                            
-                        if (!rowText.Contains("Download Subtitles Searcher") && !rowText.Contains("Watch online"))
-                            continue;
+                        // Look for subtitle page links to extract subtitle ID
+                        var subtitleLinkNode = row.SelectSingleNode(".//a[contains(@href, '/subtitles/')]");
+                        if (subtitleLinkNode == null) continue;
 
-                        // Debug: log the raw row text to understand the format
-                        Console.WriteLine($"[DEBUG] Raw row text: '{rowText}'");
+                        var subtitlePageUrl = subtitleLinkNode.GetAttributeValue("href", "");
+                        if (string.IsNullOrEmpty(subtitlePageUrl)) continue;
 
-                        // Extract the movie title (first part before "Watch online", "Download", or other markers)
-                        var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s*Watch\s*online(?:\s*Download)?|\s*Download|\s*Subtitles|\s*\d+CD)", RegexOptions.IgnoreCase);
-                        var movieTitle = titleMatch.Success ? titleMatch.Groups[1].Value.Trim() : "Unknown Movie";
+                        // Extract subtitle ID from URL like /subtitles/123456/subtitle-name
+                        var idMatch = Regex.Match(subtitlePageUrl, @"/subtitles/(\d+)");
+                        if (!idMatch.Success) continue;
                         
-                        Console.WriteLine($"[DEBUG] Title before cleanup: '{movieTitle}'");
+                        var subtitleId = idMatch.Groups[1].Value;
                         
-                        // Clean up the title - remove any trailing "Watch online", "Download", etc. (multiple passes)
-                        movieTitle = Regex.Replace(movieTitle, @"\s*(Watch\s*online|Download|Subtitles|Watch\s*onlineDownload)\s*$", "", RegexOptions.IgnoreCase);
-                        movieTitle = Regex.Replace(movieTitle, @"(Watch\s*online|Download|Subtitles)", "", RegexOptions.IgnoreCase);
-                        movieTitle = Regex.Replace(movieTitle, @"\s+", " ").Trim();
-                        if (movieTitle.Length > 100) movieTitle = movieTitle.Substring(0, 100) + "...";
-
-                        Console.WriteLine($"[DEBUG] Title after cleanup: '{movieTitle}'");
-
-                        // Look for subtitle details in the row
-                        var isHearingImpaired = rowText.Contains("hearing impaired");
-                        var isHighDef = rowText.Contains("high-definition");
-                        var isTrusted = rowText.Contains("trusted") || rowText.Contains("gold member") || rowText.Contains("platinum member");
+                        // Extract better subtitle name from the row structure
+                        var name = ExtractSubtitleName(row, rowText, subtitleLinkNode.InnerText?.Trim() ?? "Unknown");
                         
-                        // Extract uploader info
-                        var uploaderMatch = Regex.Match(rowText, @"(\w+)\s+(gold|platinum|trusted)\s+member", RegexOptions.IgnoreCase);
-                        var uploader = uploaderMatch.Success ? uploaderMatch.Groups[1].Value : "";
-
-                        // Extract language info (should be in one of the cells)
-                        var cells = row.SelectNodes(".//td");
-                        var detectedLanguage = "English"; // Default
-                        if (cells != null && cells.Count > 1)
-                        {
-                            for (int i = 1; i < Math.Min(cells.Count, 4); i++)
-                            {
-                                var cellText = cells[i].InnerText?.Trim() ?? "";
-                                if (cellText.Equals("English", StringComparison.OrdinalIgnoreCase) ||
-                                    cellText.Equals("Spanish", StringComparison.OrdinalIgnoreCase) ||
-                                    cellText.Equals("French", StringComparison.OrdinalIgnoreCase) ||
-                                    cellText.Length == 2 || cellText.Length == 3)
-                                {
-                                    detectedLanguage = cellText;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Build subtitle display name with metadata
-                        var displayName = movieTitle;
-                        var nameDetails = new List<string>();
+                        // Create simple ID format that Jellyfin can handle
+                        var simpleId = $"srt-{language}-{subtitleId}";
                         
-                        if (isHearingImpaired) nameDetails.Add("HI");
-                        if (isHighDef) nameDetails.Add("HD");
-                        if (isTrusted) nameDetails.Add("Trusted");
-                        if (!string.IsNullOrEmpty(uploader)) nameDetails.Add($"by {uploader}");
-                        
-                        if (nameDetails.Count > 0)
-                        {
-                            displayName += $" [{string.Join(", ", nameDetails)}]";
-                        }
-
-                        // For the download URL, we need to construct it based on the OpenSubtitles pattern
-                        // Since we can't find direct download links in the HTML, we'll try to extract 
-                        // subtitle IDs and construct the download URL
-                        
-                        // Look for any links that might lead to subtitle pages
-                        var linkNodes = row.SelectNodes(".//a[@href]");
-                        string downloadUrl = "";
-                        
-                        if (linkNodes != null)
-                        {
-                            foreach (var link in linkNodes)
-                            {
-                                var href = link.GetAttributeValue("href", "");
-                                if (href.Contains("/subtitles/"))
-                                {
-                                    // Extract subtitle ID from URL like /subtitles/123456/subtitle-name
-                                    var idMatch = Regex.Match(href, @"/subtitles/(\d+)");
-                                    if (idMatch.Success)
-                                    {
-                                        var subtitleId = idMatch.Groups[1].Value;
-                                        downloadUrl = $"https://www.opensubtitles.org/en/download/sub/{subtitleId}";
-                                        break;
-                                    }
-                                }
-                                else if (href.Contains("/download/"))
-                                {
-                                    downloadUrl = href.StartsWith("http") ? href : "https://www.opensubtitles.org" + href;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // If we still don't have a download URL, skip this entry
-                        if (string.IsNullOrEmpty(downloadUrl))
-                        {
-                            Console.WriteLine($"[DEBUG] No download URL found for: {movieTitle}");
-                            continue;
-                        }
+                        Console.WriteLine($"[DEBUG] Found subtitle:");
+                        Console.WriteLine($"[DEBUG] - Name: {name}");
+                        Console.WriteLine($"[DEBUG] - Subtitle ID: {subtitleId}");
+                        Console.WriteLine($"[DEBUG] - Simple ID: {simpleId}");
 
                         var result = new RemoteSubtitleInfo
                         {
-                            Id = downloadUrl,
-                            Name = displayName,
+                            Id = simpleId,
+                            Name = name,
                             ProviderName = Name,
-                            ThreeLetterISOLanguageName = MapLanguageToThreeLetterCode(detectedLanguage) ?? language,
+                            ThreeLetterISOLanguageName = MapLanguageCode(language),
                             Format = "srt",
                             IsHashMatch = false
                         };
 
                         results.Add(result);
-                        processedCount++;
-                        Console.WriteLine($"[DEBUG] Found subtitle: {displayName} - {downloadUrl}");
+                        Console.WriteLine($"[DEBUG] Added subtitle: {name} - ID: {simpleId}");
                     }
                     catch (Exception ex)
                     {
@@ -416,7 +403,6 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 _logger.LogError(ex, "Error searching for subtitles with text {SearchText}", searchText);
             }
 
-            Console.WriteLine($"[DEBUG] Returning {results.Count} results");
             return results;
         }
 
@@ -437,120 +423,115 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             return "eng";
         }
 
-        private static string? MapLanguageToThreeLetterCode(string language)
+        private string ExtractSubtitleName(HtmlNode row, string rowText, string fallbackName)
         {
-            if (string.IsNullOrEmpty(language))
-                return null;
-
-            // Handle common language names
-            var langLower = language.ToLowerInvariant();
-            return langLower switch
+            try
             {
-                "english" => "eng",
-                "spanish" => "spa",
-                "french" => "fre",
-                "german" => "ger",
-                "italian" => "ita",
-                "portuguese" => "por",
-                "russian" => "rus",
-                "japanese" => "jpn",
-                "korean" => "kor",
-                "chinese" => "chi",
-                "arabic" => "ara",
-                "hindi" => "hin",
-                "dutch" => "dut",
-                "swedish" => "swe",
-                "norwegian" => "nor",
-                "danish" => "dan",
-                "finnish" => "fin",
-                "polish" => "pol",
-                "czech" => "cze",
-                "hungarian" => "hun",
-                "turkish" => "tur",
-                _ => language.Length == 3 ? language.ToLowerInvariant() : null
-            };
+                // Method 1: Try to extract from table cells - look for movie title in first few cells
+                var cells = row.SelectNodes(".//td");
+                if (cells != null && cells.Count > 0)
+                {
+                    for (int i = 0; i < Math.Min(3, cells.Count); i++)
+                    {
+                        var cellText = cells[i].InnerText?.Trim() ?? "";
+                        // Skip cells that are just numbers, dates, or common words
+                        if (!string.IsNullOrEmpty(cellText) && 
+                            !Regex.IsMatch(cellText, @"^\d+$") && // not just numbers
+                            !Regex.IsMatch(cellText, @"^\d{4}-\d{2}-\d{2}$") && // not dates
+                            !cellText.Equals("English", StringComparison.OrdinalIgnoreCase) &&
+                            !cellText.Equals("Spanish", StringComparison.OrdinalIgnoreCase) &&
+                            !cellText.Contains("CD") &&
+                            cellText.Length > 3)
+                        {
+                            // Clean up the cell text
+                            var cleanName = Regex.Replace(cellText, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
+                            if (cleanName.Length > 3)
+                            {
+                                Console.WriteLine($"[DEBUG] Extracted name from cell {i}: '{cleanName}'");
+                                return cleanName;
+                            }
+                        }
+                    }
+                }
+
+                // Method 2: Try to parse from the full row text
+                // Look for patterns like "Movie Title (Year)" or "Series S01E01" at the beginning
+                var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s*\|\s*|\s*Watch\s*online|\s*Download|\s*\d+CD)", RegexOptions.IgnoreCase);
+                if (titleMatch.Success)
+                {
+                    var title = titleMatch.Groups[1].Value.Trim();
+                    if (title.Length > 3 && !title.Equals("English", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Further clean up
+                        title = Regex.Replace(title, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
+                        if (title.Length > 3)
+                        {
+                            Console.WriteLine($"[DEBUG] Extracted name from row text: '{title}'");
+                            return title;
+                        }
+                    }
+                }
+
+                // Method 3: Use the link text as fallback, but clean it up
+                var cleanFallback = Regex.Replace(fallbackName, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
+                Console.WriteLine($"[DEBUG] Using cleaned fallback name: '{cleanFallback}'");
+                return string.IsNullOrEmpty(cleanFallback) ? "Unknown Subtitle" : cleanFallback;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Error extracting subtitle name: {ex.Message}");
+                return fallbackName ?? "Unknown Subtitle";
+            }
         }
 
-        private static bool IsZipFile(byte[] content)
+        private bool IsZipFile(byte[] content)
         {
-            // Check for ZIP file magic number
-            return content.Length >= 4 && 
-                   content[0] == 0x50 && content[1] == 0x4B && 
-                   (content[2] == 0x03 || content[2] == 0x05 || content[2] == 0x07) && 
-                   (content[3] == 0x04 || content[3] == 0x06 || content[3] == 0x08);
+            if (content == null || content.Length < 4)
+                return false;
+
+            // Check for ZIP file magic bytes: PK (0x50, 0x4B)
+            return content[0] == 0x50 && content[1] == 0x4B;
         }
 
-        private static byte[]? ExtractSubtitleFromZip(byte[] zipContent)
+        private byte[]? ExtractSubtitleFromZip(byte[] zipContent)
         {
             try
             {
                 using var zipStream = new MemoryStream(zipContent);
-                using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
-                
-                // Find the first subtitle file
-                var subtitleEntry = archive.Entries.FirstOrDefault(e => 
-                    e.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase) ||
-                    e.Name.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase) ||
-                    e.Name.EndsWith(".sub", StringComparison.OrdinalIgnoreCase) ||
-                    e.Name.EndsWith(".ass", StringComparison.OrdinalIgnoreCase));
+                using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Read);
 
-                if (subtitleEntry == null)
+                Console.WriteLine($"[DEBUG] ZIP contains {archive.Entries.Count} entries");
+
+                // Look for subtitle files in the ZIP
+                var subtitleExtensions = new[] { ".srt", ".ass", ".ssa", ".sub", ".vtt", ".txt" };
+                
+                foreach (var entry in archive.Entries)
                 {
-                    Console.WriteLine("[DEBUG] No subtitle file found in zip");
-                    return null;
+                    Console.WriteLine($"[DEBUG] ZIP entry: {entry.Name} (size: {entry.Length})");
+                    
+                    if (subtitleExtensions.Any(ext => entry.Name.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Console.WriteLine($"[DEBUG] Extracting subtitle file: {entry.Name}");
+                        
+                        using var entryStream = entry.Open();
+                        using var memoryStream = new MemoryStream();
+                        entryStream.CopyTo(memoryStream);
+                        
+                        var content = memoryStream.ToArray();
+                        Console.WriteLine($"[DEBUG] Extracted {content.Length} bytes from {entry.Name}");
+                        
+                        return content;
+                    }
                 }
 
-                using var entryStream = subtitleEntry.Open();
-                using var ms = new MemoryStream();
-                entryStream.CopyTo(ms);
-                return ms.ToArray();
+                Console.WriteLine($"[DEBUG] No subtitle files found in ZIP");
+                return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error extracting from zip: {ex.Message}");
+                Console.WriteLine($"[DEBUG] Error extracting from ZIP: {ex.Message}");
                 return null;
             }
-        }
-
-        private static string DetectSubtitleFormat(byte[] content)
-        {
-            var text = Encoding.UTF8.GetString(content, 0, Math.Min(content.Length, 1000));
-            
-            if (text.Contains("WEBVTT"))
-                return "vtt";
-            if (text.Contains("[Script Info]"))
-                return "ass";
-            if (Regex.IsMatch(text, @"^\d+\s*$", RegexOptions.Multiline))
-                return "srt";
-            
-            // Default to SRT
-            return "srt";
-        }
-
-        private string? ExtractActualDownloadUrl(string htmlContent, string currentUrl)
-        {
-            var doc = new HtmlDocument();
-            doc.LoadHtml(htmlContent);
-            
-            // Look for direct download links
-            var downloadLink = doc.DocumentNode.SelectSingleNode("//a[contains(@href, '/subtitleserve/')]") ??
-                              doc.DocumentNode.SelectSingleNode("//a[contains(@href, '/download/')]") ??
-                              doc.DocumentNode.SelectSingleNode("//a[contains(text(), 'Download')]");
-
-            if (downloadLink != null)
-            {
-                var href = downloadLink.GetAttributeValue("href", "");
-                if (!string.IsNullOrEmpty(href))
-                {
-                    if (!href.StartsWith("http"))
-                    {
-                        href = "https://www.opensubtitles.org" + href;
-                    }
-                    return href;
-                }
-            }
-
-            return null;
         }
     }
 }
