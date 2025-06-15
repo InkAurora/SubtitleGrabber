@@ -16,7 +16,7 @@ A Jellyfin plugin that downloads subtitles from OpenSubtitles.org by scraping th
 
 ### Manual Installation
 
-1. Download the latest release from the [Releases](https://github.com/jellyfin/jellyfin-plugin-opensubtitlesgrabber/releases) page
+1. Download the latest release from the [Releases](https://github.com/InkAurora/SubtitleGrabber/releases) page
 2. Extract the files to your Jellyfin plugins directory:
    - **Windows**: `%ProgramData%\Jellyfin\Server\plugins\OpenSubtitlesGrabber\`
    - **Linux**: `/var/lib/jellyfin/plugins/OpenSubtitlesGrabber/`
@@ -50,7 +50,7 @@ The plugin can be configured through the Jellyfin web interface:
 
 1. Play a movie or TV episode in Jellyfin
 2. Click the subtitle button (CC icon)
-3. Select "Search for subtitles"
+3. Select "Edit subtitles"
 4. The plugin will automatically search OpenSubtitles.org
 5. Choose from the available subtitle options
 
@@ -149,7 +149,7 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT license. See the [LICENSE](LICENSE) file for details.
 
 ## Disclaimer
 
