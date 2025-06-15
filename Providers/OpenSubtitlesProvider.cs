@@ -57,7 +57,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         /// </summary>
         static OpenSubtitlesProvider()
         {
-            Console.WriteLine("[DEBUG] OpenSubtitlesProvider static constructor called");
+            DebugLog("[DEBUG] OpenSubtitlesProvider static constructor called");
             System.Diagnostics.Debug.WriteLine("[DEBUG] OpenSubtitlesProvider static constructor called");
         }
 
@@ -71,23 +71,29 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             
-            Console.WriteLine("[DEBUG] ==========================================");
-            Console.WriteLine("[DEBUG] OPENSUBTITLES PROVIDER CREATED!");
-            Console.WriteLine("[DEBUG] Constructor called - OpenSubtitles Grabber");
-            Console.WriteLine("[DEBUG] ==========================================");
+            DebugLog("[DEBUG] ==========================================");
+            DebugLog("[DEBUG] OPENSUBTITLES PROVIDER CREATED!");
+            DebugLog("[DEBUG] Constructor called - OpenSubtitles Grabber");
+            DebugLog("[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
-            _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");
-        }
+            _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");        }
 
         /// <inheritdoc />
-        public string Name => "OpenSubtitles Grabber";
+        public string Name => "OpenSubtitles Grabber";        private static void DebugLog(string message)
+        {
+            var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+            if (config?.EnableDebugLogging == true)
+            {
+                Console.WriteLine(message);
+            }
+        }
 
         /// <inheritdoc />
         public IEnumerable<VideoContentType> SupportedMediaTypes
         {
             get
             {
-                Console.WriteLine("[DEBUG] OpenSubtitlesProvider.SupportedMediaTypes accessed");
+                DebugLog("[DEBUG] OpenSubtitlesProvider.SupportedMediaTypes accessed");
                 return new[] { VideoContentType.Episode, VideoContentType.Movie };
             }
         }
@@ -95,11 +101,11 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         /// <inheritdoc />
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(SubtitleSearchRequest request, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[DEBUG] ==========================================");
-            Console.WriteLine($"[DEBUG] SUBTITLE SEARCH STARTED");
-            Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.Search called for: {request.MediaPath}");
-            Console.WriteLine($"[DEBUG] Language: {request.Language}");
-            Console.WriteLine($"[DEBUG] ==========================================");
+            DebugLog($"[DEBUG] ==========================================");
+            DebugLog($"[DEBUG] SUBTITLE SEARCH STARTED");
+            DebugLog($"[DEBUG] OpenSubtitlesProvider.Search called for: {request.MediaPath}");
+            DebugLog($"[DEBUG] Language: {request.Language}");
+            DebugLog($"[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine($"[DEBUG] OpenSubtitlesProvider.Search called for: {request.MediaPath}");
             
             try
@@ -111,7 +117,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 var searchText = GetSearchText(request);
                 if (!string.IsNullOrEmpty(searchText))
                 {
-                    Console.WriteLine($"[DEBUG] Searching for: {searchText}");
+                    DebugLog($"[DEBUG] Searching for: {searchText}");
                     searchResults.AddRange(await SearchByText(searchText, request.Language, config, cancellationToken).ConfigureAwait(false));
                 }
 
@@ -122,28 +128,28 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                     .Take(config.MaxSearchResults)
                     .ToList();
 
-                Console.WriteLine($"[DEBUG] ==========================================");
-                Console.WriteLine($"[DEBUG] SUBTITLE SEARCH COMPLETED");
-                Console.WriteLine($"[DEBUG] Total found: {searchResults.Count}");
-                Console.WriteLine($"[DEBUG] After deduplication: {finalResults.Count}");
-                Console.WriteLine($"[DEBUG] Final results:");
+                DebugLog($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] SUBTITLE SEARCH COMPLETED");
+                DebugLog($"[DEBUG] Total found: {searchResults.Count}");
+                DebugLog($"[DEBUG] After deduplication: {finalResults.Count}");
+                DebugLog($"[DEBUG] Final results:");
                 for (int i = 0; i < finalResults.Count; i++)
                 {
-                    Console.WriteLine($"[DEBUG] {i + 1}. ID: {finalResults[i].Id}");
-                    Console.WriteLine($"[DEBUG]    Name: {finalResults[i].Name}");
-                    Console.WriteLine($"[DEBUG]    Provider: {finalResults[i].ProviderName}");
+                    DebugLog($"[DEBUG] {i + 1}. ID: {finalResults[i].Id}");
+                    DebugLog($"[DEBUG]    Name: {finalResults[i].Name}");
+                    DebugLog($"[DEBUG]    Provider: {finalResults[i].ProviderName}");
                 }
-                Console.WriteLine($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] ==========================================");
 
                 return finalResults;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] ==========================================");
-                Console.WriteLine($"[DEBUG] SUBTITLE SEARCH FAILED");
-                Console.WriteLine($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
-                Console.WriteLine($"[DEBUG] Stack Trace: {ex.StackTrace}");
-                Console.WriteLine($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] SUBTITLE SEARCH FAILED");
+                DebugLog($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
+                DebugLog($"[DEBUG] Stack Trace: {ex.StackTrace}");
+                DebugLog($"[DEBUG] ==========================================");
                 _logger.LogError(ex, "Error searching for subtitles");
                 return new List<RemoteSubtitleInfo>();
             }
@@ -152,10 +158,10 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         /// <inheritdoc />
         public async Task<SubtitleResponse> GetSubtitles(string id, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[DEBUG] ==========================================");
-            Console.WriteLine($"[DEBUG] DOWNLOAD BUTTON CLICKED!");
-            Console.WriteLine($"[DEBUG] OpenSubtitlesProvider.GetSubtitles called for ID: {id}");
-            Console.WriteLine($"[DEBUG] ==========================================");
+            DebugLog($"[DEBUG] ==========================================");
+            DebugLog($"[DEBUG] DOWNLOAD BUTTON CLICKED!");
+            DebugLog($"[DEBUG] OpenSubtitlesProvider.GetSubtitles called for ID: {id}");
+            DebugLog($"[DEBUG] ==========================================");
             System.Diagnostics.Debug.WriteLine($"[DEBUG] OpenSubtitlesProvider.GetSubtitles called for ID: {id}");
             
             try
@@ -173,14 +179,14 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         subtitleLanguage = parts[1];
                         var subtitleId = parts[2];
                         downloadUrl = $"https://dl.opensubtitles.org/en/download/sub/{subtitleId}";
-                        Console.WriteLine($"[DEBUG] Decoded simple ID:");
-                        Console.WriteLine($"[DEBUG] - Language: {subtitleLanguage}");
-                        Console.WriteLine($"[DEBUG] - Subtitle ID: {subtitleId}");
-                        Console.WriteLine($"[DEBUG] - Download URL: {downloadUrl}");
+                        DebugLog($"[DEBUG] Decoded simple ID:");
+                        DebugLog($"[DEBUG] - Language: {subtitleLanguage}");
+                        DebugLog($"[DEBUG] - Subtitle ID: {subtitleId}");
+                        DebugLog($"[DEBUG] - Download URL: {downloadUrl}");
                     }
                     else
                     {
-                        Console.WriteLine($"[DEBUG] ERROR: Invalid simple ID format: {id}");
+                        DebugLog($"[DEBUG] ERROR: Invalid simple ID format: {id}");
                         throw new ArgumentException($"Invalid subtitle ID format: {id}");
                     }
                 }
@@ -189,11 +195,11 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                     // If it's already a full URL, use it directly
                     downloadUrl = id;
                     subtitleLanguage = "en"; // default when no language in URL
-                    Console.WriteLine($"[DEBUG] Using full URL directly: {downloadUrl}");
+                    DebugLog($"[DEBUG] Using full URL directly: {downloadUrl}");
                 }
                 else
                 {
-                    Console.WriteLine($"[DEBUG] ERROR: Unrecognized ID format: {id}");
+                    DebugLog($"[DEBUG] ERROR: Unrecognized ID format: {id}");
                     throw new ArgumentException($"Unrecognized subtitle ID format: {id}");
                 }
             
@@ -201,55 +207,55 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
                 httpClient.DefaultRequestHeaders.Add("Referer", "https://www.opensubtitles.org/");
                 
-                Console.WriteLine($"[DEBUG] Step 1: HTTP client configured");
-                Console.WriteLine($"[DEBUG] Step 2: Attempting to download from URL: {downloadUrl}");
+                DebugLog($"[DEBUG] Step 1: HTTP client configured");
+                DebugLog($"[DEBUG] Step 2: Attempting to download from URL: {downloadUrl}");
                 
                 var response = await httpClient.GetAsync(downloadUrl, cancellationToken).ConfigureAwait(false);
                 
-                Console.WriteLine($"[DEBUG] Step 3: HTTP Response received");
-                Console.WriteLine($"[DEBUG] - Status Code: {response.StatusCode}");
-                Console.WriteLine($"[DEBUG] - Status: {(response.IsSuccessStatusCode ? "SUCCESS" : "FAILED")}");
-                Console.WriteLine($"[DEBUG] - Reason Phrase: {response.ReasonPhrase}");
+                DebugLog($"[DEBUG] Step 3: HTTP Response received");
+                DebugLog($"[DEBUG] - Status Code: {response.StatusCode}");
+                DebugLog($"[DEBUG] - Status: {(response.IsSuccessStatusCode ? "SUCCESS" : "FAILED")}");
+                DebugLog($"[DEBUG] - Reason Phrase: {response.ReasonPhrase}");
                 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[DEBUG] ERROR: Download failed with status: {response.StatusCode}");
+                    DebugLog($"[DEBUG] ERROR: Download failed with status: {response.StatusCode}");
                     throw new HttpRequestException($"Failed to download subtitle: {response.StatusCode} - {response.ReasonPhrase}");
                 }
 
                 var content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[DEBUG] Step 4: Content downloaded - size: {content.Length} bytes");
+                DebugLog($"[DEBUG] Step 4: Content downloaded - size: {content.Length} bytes");
                 
                 // Check if this is a ZIP file and extract subtitle content
                 byte[] subtitleContent;
                 if (IsZipFile(content))
                 {
-                    Console.WriteLine($"[DEBUG] Step 5a: Content is ZIP file - extracting subtitle");
+                    DebugLog($"[DEBUG] Step 5a: Content is ZIP file - extracting subtitle");
                     var extractedContent = ExtractSubtitleFromZip(content);
                     if (extractedContent == null)
                     {
-                        Console.WriteLine($"[DEBUG] ERROR: Failed to extract subtitle from ZIP");
+                        DebugLog($"[DEBUG] ERROR: Failed to extract subtitle from ZIP");
                         throw new InvalidOperationException("Failed to extract subtitle from ZIP file");
                     }
                     subtitleContent = extractedContent;
-                    Console.WriteLine($"[DEBUG] Step 5b: Successfully extracted subtitle from ZIP - size: {subtitleContent.Length} bytes");
+                    DebugLog($"[DEBUG] Step 5b: Successfully extracted subtitle from ZIP - size: {subtitleContent.Length} bytes");
                 }
                 else
                 {
-                    Console.WriteLine($"[DEBUG] Step 5a: Content is direct subtitle file");
+                    DebugLog($"[DEBUG] Step 5a: Content is direct subtitle file");
                     subtitleContent = content;
                 }
                 
                 var format = DetectSubtitleFormat(subtitleContent);
-                Console.WriteLine($"[DEBUG] Step 6: Detected subtitle format: {format}");
+                DebugLog($"[DEBUG] Step 6: Detected subtitle format: {format}");
 
-                Console.WriteLine($"[DEBUG] ==========================================");
-                Console.WriteLine($"[DEBUG] DOWNLOAD COMPLETED SUCCESSFULLY!");
-                Console.WriteLine($"[DEBUG] - Format: {format}");
-                Console.WriteLine($"[DEBUG] - Size: {subtitleContent.Length} bytes");
-                Console.WriteLine($"[DEBUG] - Language: {subtitleLanguage}");
-                Console.WriteLine($"[DEBUG] - Was ZIP: {IsZipFile(content)}");
-                Console.WriteLine($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] DOWNLOAD COMPLETED SUCCESSFULLY!");
+                DebugLog($"[DEBUG] - Format: {format}");
+                DebugLog($"[DEBUG] - Size: {subtitleContent.Length} bytes");
+                DebugLog($"[DEBUG] - Language: {subtitleLanguage}");
+                DebugLog($"[DEBUG] - Was ZIP: {IsZipFile(content)}");
+                DebugLog($"[DEBUG] ==========================================");
 
                 return new SubtitleResponse
                 {
@@ -260,11 +266,11 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] ==========================================");
-                Console.WriteLine($"[DEBUG] DOWNLOAD FAILED!");
-                Console.WriteLine($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
-                Console.WriteLine($"[DEBUG] Stack Trace: {ex.StackTrace}");
-                Console.WriteLine($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] ==========================================");
+                DebugLog($"[DEBUG] DOWNLOAD FAILED!");
+                DebugLog($"[DEBUG] ERROR: {ex.GetType().Name}: {ex.Message}");
+                DebugLog($"[DEBUG] Stack Trace: {ex.StackTrace}");
+                DebugLog($"[DEBUG] ==========================================");
                 _logger.LogError(ex, "Error downloading subtitle with ID {Id}", id);
                 throw;
             }
@@ -326,7 +332,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 var encodedSearch = HttpUtility.UrlEncode(searchText);
                 var searchUrl = $"https://www.opensubtitles.org/en/search/sublanguageid-{languageCode}/moviename-{encodedSearch}";
 
-                Console.WriteLine($"[DEBUG] Searching URL: {searchUrl}");
+                DebugLog($"[DEBUG] Searching URL: {searchUrl}");
 
                 using var httpClient = _httpClientFactory.CreateClient();
                 httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
@@ -334,7 +340,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 var response = await httpClient.GetAsync(searchUrl, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[DEBUG] HTTP error: {response.StatusCode}");
+                    DebugLog($"[DEBUG] HTTP error: {response.StatusCode}");
                     return results;
                 }
 
@@ -344,7 +350,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
 
                 // Parse search results to get subtitle IDs
                 var subtitleRows = doc.DocumentNode.SelectNodes("//tr[@onclick]") ?? new HtmlNodeCollection(null);
-                Console.WriteLine($"[DEBUG] Found {subtitleRows.Count} potential subtitle rows");
+                DebugLog($"[DEBUG] Found {subtitleRows.Count} potential subtitle rows");
                 
                 var subtitleIds = new List<string>();
                 
@@ -366,16 +372,16 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         var subtitleId = idMatch.Groups[1].Value;
                         subtitleIds.Add(subtitleId);
                         
-                        Console.WriteLine($"[DEBUG] Found subtitle ID: {subtitleId}");
+                        DebugLog($"[DEBUG] Found subtitle ID: {subtitleId}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[DEBUG] Error parsing subtitle row: {ex.Message}");
+                        DebugLog($"[DEBUG] Error parsing subtitle row: {ex.Message}");
                         continue;
                     }
                 }
                 
-                Console.WriteLine($"[DEBUG] Collected {subtitleIds.Count} subtitle IDs, now fetching individual pages...");
+                DebugLog($"[DEBUG] Collected {subtitleIds.Count} subtitle IDs, now fetching individual pages...");
                 
                 // Now fetch individual subtitle pages to get the actual filenames
                 foreach (var subtitleId in subtitleIds)
@@ -385,17 +391,17 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         var subtitleName = await GetSubtitleNameFromPage(subtitleId, httpClient, cancellationToken);
                         if (string.IsNullOrEmpty(subtitleName))
                         {
-                            Console.WriteLine($"[DEBUG] Could not get subtitle name for ID {subtitleId}, skipping");
+                            DebugLog($"[DEBUG] Could not get subtitle name for ID {subtitleId}, skipping");
                             continue;
                         }
                         
                         // Create simple ID format that Jellyfin can handle
                         var simpleId = $"srt-{language}-{subtitleId}";
                         
-                        Console.WriteLine($"[DEBUG] Found subtitle:");
-                        Console.WriteLine($"[DEBUG] - Name: {subtitleName}");
-                        Console.WriteLine($"[DEBUG] - Subtitle ID: {subtitleId}");
-                        Console.WriteLine($"[DEBUG] - Simple ID: {simpleId}");
+                        DebugLog($"[DEBUG] Found subtitle:");
+                        DebugLog($"[DEBUG] - Name: {subtitleName}");
+                        DebugLog($"[DEBUG] - Subtitle ID: {subtitleId}");
+                        DebugLog($"[DEBUG] - Simple ID: {simpleId}");
 
                         var result = new RemoteSubtitleInfo
                         {
@@ -408,18 +414,18 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         };
 
                         results.Add(result);
-                        Console.WriteLine($"[DEBUG] Added subtitle: {subtitleName} - ID: {simpleId}");
+                        DebugLog($"[DEBUG] Added subtitle: {subtitleName} - ID: {simpleId}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[DEBUG] Error processing subtitle ID {subtitleId}: {ex.Message}");
+                        DebugLog($"[DEBUG] Error processing subtitle ID {subtitleId}: {ex.Message}");
                         continue;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error in SearchByText: {ex.Message}");
+                DebugLog($"[DEBUG] Error in SearchByText: {ex.Message}");
                 _logger.LogError(ex, "Error searching for subtitles with text {SearchText}", searchText);
             }
 
@@ -431,7 +437,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             try
             {
                 var pageUrl = $"https://www.opensubtitles.org/en/subtitles/{subtitleId}";
-                Console.WriteLine($"[DEBUG] Fetching subtitle page: {pageUrl}");
+                DebugLog($"[DEBUG] Fetching subtitle page: {pageUrl}");
                 
                 // Configure HttpClient to follow redirects
                 var request = new HttpRequestMessage(HttpMethod.Get, pageUrl);
@@ -451,14 +457,14 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                             location = $"https://www.opensubtitles.org{location}";
                         }
                         
-                        Console.WriteLine($"[DEBUG] Following redirect to: {location}");
+                        DebugLog($"[DEBUG] Following redirect to: {location}");
                         response = await httpClient.GetAsync(location, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[DEBUG] Failed to fetch subtitle page {subtitleId}: {response.StatusCode}");
+                    DebugLog($"[DEBUG] Failed to fetch subtitle page {subtitleId}: {response.StatusCode}");
                     return null;
                 }
 
@@ -471,7 +477,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 if (downloadLink != null)
                 {
                     var linkText = downloadLink.InnerText?.Trim();
-                    Console.WriteLine($"[DEBUG] Found download link text: '{linkText}'");
+                    DebugLog($"[DEBUG] Found download link text: '{linkText}'");
                     
                     if (!string.IsNullOrEmpty(linkText))
                     {
@@ -482,18 +488,18 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         
                         if (!string.IsNullOrEmpty(cleanedText) && cleanedText.Length > 5)
                         {
-                            Console.WriteLine($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
+                            DebugLog($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
                             return cleanedText;
                         }
                     }
                 }
                 
-                Console.WriteLine($"[DEBUG] Could not find subtitle filename on page {subtitleId}");
+                DebugLog($"[DEBUG] Could not find subtitle filename on page {subtitleId}");
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error fetching subtitle page {subtitleId}: {ex.Message}");
+                DebugLog($"[DEBUG] Error fetching subtitle page {subtitleId}: {ex.Message}");
                 return null;
             }
         }
@@ -519,36 +525,36 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         {
             try
             {
-                Console.WriteLine($"[DEBUG] ExtractSubtitleName - Analyzing HTML structure");
+                DebugLog($"[DEBUG] ExtractSubtitleName - Analyzing HTML structure");
                 
                 // Debug: Let's see what img tags we have and their attributes
                 var allImgs = row.SelectNodes(".//img");
                 if (allImgs != null)
                 {
-                    Console.WriteLine($"[DEBUG] Found {allImgs.Count} img tags in row");
+                    DebugLog($"[DEBUG] Found {allImgs.Count} img tags in row");
                     for (int i = 0; i < Math.Min(5, allImgs.Count); i++)
                     {
                         var title = allImgs[i].GetAttributeValue("title", "");
                         var alt = allImgs[i].GetAttributeValue("alt", "");
                         var src = allImgs[i].GetAttributeValue("src", "");
-                        Console.WriteLine($"[DEBUG] Img {i}: title='{title}', alt='{alt}', src='{src.Substring(0, Math.Min(50, src.Length))}'");
+                        DebugLog($"[DEBUG] Img {i}: title='{title}', alt='{alt}', src='{src.Substring(0, Math.Min(50, src.Length))}'");
                     }
                 }
                 else
                 {
-                    Console.WriteLine($"[DEBUG] No img tags found in row");
+                    DebugLog($"[DEBUG] No img tags found in row");
                 }
                 
                 // Debug: Let's see what anchor tags we have
                 var allAnchors = row.SelectNodes(".//a");
                 if (allAnchors != null)
                 {
-                    Console.WriteLine($"[DEBUG] Found {allAnchors.Count} anchor tags in row");
+                    DebugLog($"[DEBUG] Found {allAnchors.Count} anchor tags in row");
                     for (int i = 0; i < Math.Min(3, allAnchors.Count); i++)
                     {
                         var href = allAnchors[i].GetAttributeValue("href", "");
                         var text = allAnchors[i].InnerText?.Trim() ?? "";
-                        Console.WriteLine($"[DEBUG] Anchor {i}: href='{href.Substring(0, Math.Min(50, href.Length))}', text='{text.Substring(0, Math.Min(50, text.Length))}'");
+                        DebugLog($"[DEBUG] Anchor {i}: href='{href.Substring(0, Math.Min(50, href.Length))}', text='{text.Substring(0, Math.Min(50, text.Length))}'");
                     }
                 }
                 
@@ -567,14 +573,14 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                     var imgNode = row.SelectSingleNode(pattern);
                     if (imgNode != null)
                     {
-                        Console.WriteLine($"[DEBUG] Found img with pattern '{pattern}'");
+                        DebugLog($"[DEBUG] Found img with pattern '{pattern}'");
                         
                         // Get the parent anchor tag
                         var parentAnchor = imgNode.ParentNode;
                         if (parentAnchor != null && parentAnchor.Name.ToLower() == "a")
                         {
                             var anchorText = parentAnchor.InnerText?.Trim();
-                            Console.WriteLine($"[DEBUG] Found parent anchor text: '{anchorText}'");
+                            DebugLog($"[DEBUG] Found parent anchor text: '{anchorText}'");
                             
                             if (!string.IsNullOrEmpty(anchorText))
                             {
@@ -588,24 +594,24 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                                 
                                 if (!string.IsNullOrEmpty(cleanedText) && cleanedText.Length > 5)
                                 {
-                                    Console.WriteLine($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
+                                    DebugLog($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
                                     return cleanedText;
                                 }
                             }
                         }
                         else
                         {
-                            Console.WriteLine($"[DEBUG] Parent is not an anchor tag or is null: {parentAnchor?.Name}");
+                            DebugLog($"[DEBUG] Parent is not an anchor tag or is null: {parentAnchor?.Name}");
                         }
                     }
                 }
 
-                Console.WriteLine($"[DEBUG] HTML extraction failed with all patterns, returning Unknown Subtitle");
+                DebugLog($"[DEBUG] HTML extraction failed with all patterns, returning Unknown Subtitle");
                 return "Unknown Subtitle";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error extracting subtitle name: {ex.Message}");
+                DebugLog($"[DEBUG] Error extracting subtitle name: {ex.Message}");
                 return "Unknown Subtitle";
             }
         }
@@ -615,7 +621,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             if (string.IsNullOrEmpty(name))
                 return string.Empty;
 
-            Console.WriteLine($"[DEBUG] CleanSubtitleName - input: '{name}'");
+            DebugLog($"[DEBUG] CleanSubtitleName - input: '{name}'");
             
             // For release names like "Shrek.2.2004.720p.BluRay.x264.YIFY", just return as-is
             // Only do minimal cleanup
@@ -624,7 +630,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             // Remove any HTML remnants or problematic chars
             cleaned = Regex.Replace(cleaned, @"[<>\""]", "");
             
-            Console.WriteLine($"[DEBUG] CleanSubtitleName - output: '{cleaned}'");
+            DebugLog($"[DEBUG] CleanSubtitleName - output: '{cleaned}'");
             return cleaned;
         }
 
@@ -664,36 +670,36 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 using var zipStream = new MemoryStream(zipContent);
                 using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Read);
 
-                Console.WriteLine($"[DEBUG] ZIP contains {archive.Entries.Count} entries");
+                DebugLog($"[DEBUG] ZIP contains {archive.Entries.Count} entries");
 
                 // Look for subtitle files in the ZIP
                 var subtitleExtensions = new[] { ".srt", ".ass", ".ssa", ".sub", ".vtt", ".txt" };
                 
                 foreach (var entry in archive.Entries)
                 {
-                    Console.WriteLine($"[DEBUG] ZIP entry: {entry.Name} (size: {entry.Length})");
+                    DebugLog($"[DEBUG] ZIP entry: {entry.Name} (size: {entry.Length})");
                     
                     if (subtitleExtensions.Any(ext => entry.Name.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
                     {
-                        Console.WriteLine($"[DEBUG] Extracting subtitle file: {entry.Name}");
+                        DebugLog($"[DEBUG] Extracting subtitle file: {entry.Name}");
                         
                         using var entryStream = entry.Open();
                         using var memoryStream = new MemoryStream();
                         entryStream.CopyTo(memoryStream);
                         
                         var content = memoryStream.ToArray();
-                        Console.WriteLine($"[DEBUG] Extracted {content.Length} bytes from {entry.Name}");
+                        DebugLog($"[DEBUG] Extracted {content.Length} bytes from {entry.Name}");
                         
                         return content;
                     }
                 }
 
-                Console.WriteLine($"[DEBUG] No subtitle files found in ZIP");
+                DebugLog($"[DEBUG] No subtitle files found in ZIP");
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Error extracting from ZIP: {ex.Message}");
+                DebugLog($"[DEBUG] Error extracting from ZIP: {ex.Message}");
                 return null;
             }
         }
