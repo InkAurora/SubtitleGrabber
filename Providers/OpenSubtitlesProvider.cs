@@ -72,6 +72,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             
             Console.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
             System.Diagnostics.Debug.WriteLine("[DEBUG] OpenSubtitlesProvider constructor called");
+            _logger.LogInformation("OpenSubtitles Grabber subtitle provider initialized");
         }
 
         /// <inheritdoc />
@@ -290,11 +291,12 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         if (!rowText.Contains("Download Subtitles Searcher") && !rowText.Contains("Watch online"))
                             continue;
 
-                        // Extract the movie title (first part before "Watch online" or other markers)
-                        var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s+Watch online|\s+Subtitles|\s+\d+CD)", RegexOptions.IgnoreCase);
+                        // Extract the movie title (first part before "Watch online", "Download", or other markers)
+                        var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s+Watch\s+online(?:\s*Download)?|\s+Download|\s+Subtitles|\s+\d+CD)", RegexOptions.IgnoreCase);
                         var movieTitle = titleMatch.Success ? titleMatch.Groups[1].Value.Trim() : "Unknown Movie";
                         
-                        // Clean up the title
+                        // Clean up the title - remove any trailing "Watch online", "Download", etc.
+                        movieTitle = Regex.Replace(movieTitle, @"\s*(Watch\s+online|Download|Subtitles)\s*$", "", RegexOptions.IgnoreCase);
                         movieTitle = Regex.Replace(movieTitle, @"\s+", " ").Trim();
                         if (movieTitle.Length > 100) movieTitle = movieTitle.Substring(0, 100) + "...";
 

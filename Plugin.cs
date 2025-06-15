@@ -63,7 +63,7 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber
                 new PluginPageInfo
                 {
                     Name = this.Name,
-                    EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.config.html", GetType().Namespace)
+                    EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)
                 }
             };
         }

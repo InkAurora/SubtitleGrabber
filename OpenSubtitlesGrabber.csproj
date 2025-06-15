@@ -50,13 +50,14 @@
 
   <ItemGroup>
     <Compile Include="Plugin.cs" />
+    <Compile Include="PluginServiceRegistrator.cs" />
     <Compile Include="Configuration\PluginConfiguration.cs" />
     <Compile Include="Providers\OpenSubtitlesProvider.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="config.html">
-      <LogicalName>Jellyfin.Plugin.OpenSubtitlesGrabber.config.html</LogicalName>
+    <EmbeddedResource Include="Configuration\configPage.html">
+      <LogicalName>Jellyfin.Plugin.OpenSubtitlesGrabber.Configuration.configPage.html</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

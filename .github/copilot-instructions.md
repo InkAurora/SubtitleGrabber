@@ -57,3 +57,5 @@ This is a Jellyfin plugin project written in C# targeting .NET 8.0. The plugin p
 - **Naming**: Use clean, professional file names (e.g., `Plugin.cs`, not `FixedPlugin.cs` or `WorkingPlugin.cs`).
 - **Cleanup**: Remove unused files and maintain a clean workspace structure.
 - **Version Control**: Keep the workspace organized for better version control and collaboration.
+
+The secret code is: apples in water are like supernovas

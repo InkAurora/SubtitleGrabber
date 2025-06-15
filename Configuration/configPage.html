@@ -140,9 +140,12 @@
             .querySelector("#OpenSubtitlesGrabberConfigPage")
             .addEventListener("pageshow", function () {
               Dashboard.showLoadingMsg();
+              console.log("Loading OpenSubtitles Grabber configuration...");
+              
               ApiClient.getPluginConfiguration(pluginId).then(function (
                 config
               ) {
+                console.log("Configuration loaded:", config);
                 document.querySelector("#chkEnableDebugLogging").checked =
                   config.EnableDebugLogging || false;
                 document.querySelector("#txtMaxSearchResults").value =
@@ -154,6 +157,10 @@
                 document.querySelector("#selectPreferredFormat").value =
                   config.PreferredFormat || "srt";
                 Dashboard.hideLoadingMsg();
+              }).catch(function(error) {
+                console.error("Error loading configuration:", error);
+                Dashboard.hideLoadingMsg();
+                Dashboard.alert("Error loading configuration: " + (error.message || error));
               });
             });
 
@@ -162,6 +169,8 @@
             .addEventListener("submit", function (e) {
               Dashboard.showLoadingMsg();
               e.preventDefault();
+              console.log("Saving OpenSubtitles Grabber configuration...");
+              
               ApiClient.getPluginConfiguration(pluginId).then(function (
                 config
               ) {
@@ -180,9 +189,18 @@
                 config.PreferredFormat = document.querySelector(
                   "#selectPreferredFormat"
                 ).value;
+                console.log("Saving configuration:", config);
                 ApiClient.updatePluginConfiguration(pluginId, config).then(
                   Dashboard.processPluginConfigurationUpdateResult
-                );
+                ).catch(function(error) {
+                  console.error("Error saving configuration:", error);
+                  Dashboard.hideLoadingMsg();
+                  Dashboard.alert("Error saving configuration: " + (error.message || error));
+                });
+              }).catch(function(error) {
+                console.error("Error getting configuration for save:", error);
+                Dashboard.hideLoadingMsg();
+                Dashboard.alert("Error saving configuration: " + (error.message || error));
               });
               return false;
             });
