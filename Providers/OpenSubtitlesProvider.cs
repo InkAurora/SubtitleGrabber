@@ -291,14 +291,22 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         if (!rowText.Contains("Download Subtitles Searcher") && !rowText.Contains("Watch online"))
                             continue;
 
+                        // Debug: log the raw row text to understand the format
+                        Console.WriteLine($"[DEBUG] Raw row text: '{rowText}'");
+
                         // Extract the movie title (first part before "Watch online", "Download", or other markers)
-                        var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s+Watch\s+online(?:\s*Download)?|\s+Download|\s+Subtitles|\s+\d+CD)", RegexOptions.IgnoreCase);
+                        var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s*Watch\s*online(?:\s*Download)?|\s*Download|\s*Subtitles|\s*\d+CD)", RegexOptions.IgnoreCase);
                         var movieTitle = titleMatch.Success ? titleMatch.Groups[1].Value.Trim() : "Unknown Movie";
                         
-                        // Clean up the title - remove any trailing "Watch online", "Download", etc.
-                        movieTitle = Regex.Replace(movieTitle, @"\s*(Watch\s+online|Download|Subtitles)\s*$", "", RegexOptions.IgnoreCase);
+                        Console.WriteLine($"[DEBUG] Title before cleanup: '{movieTitle}'");
+                        
+                        // Clean up the title - remove any trailing "Watch online", "Download", etc. (multiple passes)
+                        movieTitle = Regex.Replace(movieTitle, @"\s*(Watch\s*online|Download|Subtitles|Watch\s*onlineDownload)\s*$", "", RegexOptions.IgnoreCase);
+                        movieTitle = Regex.Replace(movieTitle, @"(Watch\s*online|Download|Subtitles)", "", RegexOptions.IgnoreCase);
                         movieTitle = Regex.Replace(movieTitle, @"\s+", " ").Trim();
                         if (movieTitle.Length > 100) movieTitle = movieTitle.Substring(0, 100) + "...";
+
+                        Console.WriteLine($"[DEBUG] Title after cleanup: '{movieTitle}'");
 
                         // Look for subtitle details in the row
                         var isHearingImpaired = rowText.Contains("hearing impaired");
