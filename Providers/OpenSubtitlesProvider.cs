@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -341,18 +342,16 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
-                // Parse search results
+                // Parse search results to get subtitle IDs
                 var subtitleRows = doc.DocumentNode.SelectNodes("//tr[@onclick]") ?? new HtmlNodeCollection(null);
                 Console.WriteLine($"[DEBUG] Found {subtitleRows.Count} potential subtitle rows");
+                
+                var subtitleIds = new List<string>();
                 
                 foreach (var row in subtitleRows.Take(config.MaxSearchResults))
                 {
                     try
                     {
-                        // Get the full row text for parsing
-                        var rowText = row.InnerText ?? "";
-                        Console.WriteLine($"[DEBUG] Raw row text: '{rowText.Substring(0, Math.Min(200, rowText.Length))}...'");
-                        
                         // Look for subtitle page links to extract subtitle ID
                         var subtitleLinkNode = row.SelectSingleNode(".//a[contains(@href, '/subtitles/')]");
                         if (subtitleLinkNode == null) continue;
@@ -365,22 +364,43 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         if (!idMatch.Success) continue;
                         
                         var subtitleId = idMatch.Groups[1].Value;
+                        subtitleIds.Add(subtitleId);
                         
-                        // Extract better subtitle name from the row structure
-                        var name = ExtractSubtitleName(row, rowText, subtitleLinkNode.InnerText?.Trim() ?? "Unknown");
+                        Console.WriteLine($"[DEBUG] Found subtitle ID: {subtitleId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[DEBUG] Error parsing subtitle row: {ex.Message}");
+                        continue;
+                    }
+                }
+                
+                Console.WriteLine($"[DEBUG] Collected {subtitleIds.Count} subtitle IDs, now fetching individual pages...");
+                
+                // Now fetch individual subtitle pages to get the actual filenames
+                foreach (var subtitleId in subtitleIds)
+                {
+                    try
+                    {
+                        var subtitleName = await GetSubtitleNameFromPage(subtitleId, httpClient, cancellationToken);
+                        if (string.IsNullOrEmpty(subtitleName))
+                        {
+                            Console.WriteLine($"[DEBUG] Could not get subtitle name for ID {subtitleId}, skipping");
+                            continue;
+                        }
                         
                         // Create simple ID format that Jellyfin can handle
                         var simpleId = $"srt-{language}-{subtitleId}";
                         
                         Console.WriteLine($"[DEBUG] Found subtitle:");
-                        Console.WriteLine($"[DEBUG] - Name: {name}");
+                        Console.WriteLine($"[DEBUG] - Name: {subtitleName}");
                         Console.WriteLine($"[DEBUG] - Subtitle ID: {subtitleId}");
                         Console.WriteLine($"[DEBUG] - Simple ID: {simpleId}");
 
                         var result = new RemoteSubtitleInfo
                         {
                             Id = simpleId,
-                            Name = name,
+                            Name = subtitleName,
                             ProviderName = Name,
                             ThreeLetterISOLanguageName = MapLanguageCode(language),
                             Format = "srt",
@@ -388,11 +408,11 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
                         };
 
                         results.Add(result);
-                        Console.WriteLine($"[DEBUG] Added subtitle: {name} - ID: {simpleId}");
+                        Console.WriteLine($"[DEBUG] Added subtitle: {subtitleName} - ID: {simpleId}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[DEBUG] Error parsing subtitle row: {ex.Message}");
+                        Console.WriteLine($"[DEBUG] Error processing subtitle ID {subtitleId}: {ex.Message}");
                         continue;
                     }
                 }
@@ -404,6 +424,78 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
             }
 
             return results;
+        }
+
+        private async Task<string?> GetSubtitleNameFromPage(string subtitleId, HttpClient httpClient, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var pageUrl = $"https://www.opensubtitles.org/en/subtitles/{subtitleId}";
+                Console.WriteLine($"[DEBUG] Fetching subtitle page: {pageUrl}");
+                
+                // Configure HttpClient to follow redirects
+                var request = new HttpRequestMessage(HttpMethod.Get, pageUrl);
+                var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                
+                // If we get a redirect, follow it manually
+                if (response.StatusCode == HttpStatusCode.MovedPermanently || 
+                    response.StatusCode == HttpStatusCode.Found || 
+                    response.StatusCode == HttpStatusCode.SeeOther)
+                {
+                    var location = response.Headers.Location?.ToString();
+                    if (!string.IsNullOrEmpty(location))
+                    {
+                        // Make sure it's an absolute URL
+                        if (!location.StartsWith("http"))
+                        {
+                            location = $"https://www.opensubtitles.org{location}";
+                        }
+                        
+                        Console.WriteLine($"[DEBUG] Following redirect to: {location}");
+                        response = await httpClient.GetAsync(location, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[DEBUG] Failed to fetch subtitle page {subtitleId}: {response.StatusCode}");
+                    return null;
+                }
+
+                var html = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                // Look for the subtitle filename in the download link
+                var downloadLink = doc.DocumentNode.SelectSingleNode("//a[contains(@href, '/download/file/')]");
+                if (downloadLink != null)
+                {
+                    var linkText = downloadLink.InnerText?.Trim();
+                    Console.WriteLine($"[DEBUG] Found download link text: '{linkText}'");
+                    
+                    if (!string.IsNullOrEmpty(linkText))
+                    {
+                        // Remove file size info and extension
+                        var cleanedText = Regex.Replace(linkText, @"\s*\(\d+bytes?\)\s*", "", RegexOptions.IgnoreCase);
+                        cleanedText = Regex.Replace(cleanedText, @"\.srt$", "", RegexOptions.IgnoreCase);
+                        cleanedText = cleanedText.Trim();
+                        
+                        if (!string.IsNullOrEmpty(cleanedText) && cleanedText.Length > 5)
+                        {
+                            Console.WriteLine($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
+                            return cleanedText;
+                        }
+                    }
+                }
+                
+                Console.WriteLine($"[DEBUG] Could not find subtitle filename on page {subtitleId}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Error fetching subtitle page {subtitleId}: {ex.Message}");
+                return null;
+            }
         }
 
         private static string MapLanguageCode(string language)
@@ -427,61 +519,133 @@ namespace Jellyfin.Plugin.OpenSubtitlesGrabber.Providers
         {
             try
             {
-                // Method 1: Try to extract from table cells - look for movie title in first few cells
-                var cells = row.SelectNodes(".//td");
-                if (cells != null && cells.Count > 0)
+                Console.WriteLine($"[DEBUG] ExtractSubtitleName - Analyzing HTML structure");
+                
+                // Debug: Let's see what img tags we have and their attributes
+                var allImgs = row.SelectNodes(".//img");
+                if (allImgs != null)
                 {
-                    for (int i = 0; i < Math.Min(3, cells.Count); i++)
+                    Console.WriteLine($"[DEBUG] Found {allImgs.Count} img tags in row");
+                    for (int i = 0; i < Math.Min(5, allImgs.Count); i++)
                     {
-                        var cellText = cells[i].InnerText?.Trim() ?? "";
-                        // Skip cells that are just numbers, dates, or common words
-                        if (!string.IsNullOrEmpty(cellText) && 
-                            !Regex.IsMatch(cellText, @"^\d+$") && // not just numbers
-                            !Regex.IsMatch(cellText, @"^\d{4}-\d{2}-\d{2}$") && // not dates
-                            !cellText.Equals("English", StringComparison.OrdinalIgnoreCase) &&
-                            !cellText.Equals("Spanish", StringComparison.OrdinalIgnoreCase) &&
-                            !cellText.Contains("CD") &&
-                            cellText.Length > 3)
+                        var title = allImgs[i].GetAttributeValue("title", "");
+                        var alt = allImgs[i].GetAttributeValue("alt", "");
+                        var src = allImgs[i].GetAttributeValue("src", "");
+                        Console.WriteLine($"[DEBUG] Img {i}: title='{title}', alt='{alt}', src='{src.Substring(0, Math.Min(50, src.Length))}'");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[DEBUG] No img tags found in row");
+                }
+                
+                // Debug: Let's see what anchor tags we have
+                var allAnchors = row.SelectNodes(".//a");
+                if (allAnchors != null)
+                {
+                    Console.WriteLine($"[DEBUG] Found {allAnchors.Count} anchor tags in row");
+                    for (int i = 0; i < Math.Min(3, allAnchors.Count); i++)
+                    {
+                        var href = allAnchors[i].GetAttributeValue("href", "");
+                        var text = allAnchors[i].InnerText?.Trim() ?? "";
+                        Console.WriteLine($"[DEBUG] Anchor {i}: href='{href.Substring(0, Math.Min(50, href.Length))}', text='{text.Substring(0, Math.Min(50, text.Length))}'");
+                    }
+                }
+                
+                // Try different variations of the img selector
+                var patterns = new[]
+                {
+                    ".//img[@title='Subtitle filename']",
+                    ".//img[contains(@title, 'Subtitle')]",
+                    ".//img[contains(@title, 'filename')]",
+                    ".//img[contains(@alt, 'filename')]",
+                    ".//img[contains(@alt, 'Subtitle')]"
+                };
+                
+                foreach (var pattern in patterns)
+                {
+                    var imgNode = row.SelectSingleNode(pattern);
+                    if (imgNode != null)
+                    {
+                        Console.WriteLine($"[DEBUG] Found img with pattern '{pattern}'");
+                        
+                        // Get the parent anchor tag
+                        var parentAnchor = imgNode.ParentNode;
+                        if (parentAnchor != null && parentAnchor.Name.ToLower() == "a")
                         {
-                            // Clean up the cell text
-                            var cleanName = Regex.Replace(cellText, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
-                            if (cleanName.Length > 3)
+                            var anchorText = parentAnchor.InnerText?.Trim();
+                            Console.WriteLine($"[DEBUG] Found parent anchor text: '{anchorText}'");
+                            
+                            if (!string.IsNullOrEmpty(anchorText))
                             {
-                                Console.WriteLine($"[DEBUG] Extracted name from cell {i}: '{cleanName}'");
-                                return cleanName;
+                                // Remove the file size info (e.g., "(103909bytes)")
+                                var cleanedText = Regex.Replace(anchorText, @"\s*\(\d+bytes?\)\s*", "", RegexOptions.IgnoreCase);
+                                
+                                // Remove the .srt extension
+                                cleanedText = Regex.Replace(cleanedText, @"\.srt$", "", RegexOptions.IgnoreCase);
+                                
+                                cleanedText = cleanedText.Trim();
+                                
+                                if (!string.IsNullOrEmpty(cleanedText) && cleanedText.Length > 5)
+                                {
+                                    Console.WriteLine($"[DEBUG] Extracted subtitle name: '{cleanedText}'");
+                                    return cleanedText;
+                                }
                             }
                         }
-                    }
-                }
-
-                // Method 2: Try to parse from the full row text
-                // Look for patterns like "Movie Title (Year)" or "Series S01E01" at the beginning
-                var titleMatch = Regex.Match(rowText, @"^([^|]+?)(?:\s*\|\s*|\s*Watch\s*online|\s*Download|\s*\d+CD)", RegexOptions.IgnoreCase);
-                if (titleMatch.Success)
-                {
-                    var title = titleMatch.Groups[1].Value.Trim();
-                    if (title.Length > 3 && !title.Equals("English", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Further clean up
-                        title = Regex.Replace(title, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
-                        if (title.Length > 3)
+                        else
                         {
-                            Console.WriteLine($"[DEBUG] Extracted name from row text: '{title}'");
-                            return title;
+                            Console.WriteLine($"[DEBUG] Parent is not an anchor tag or is null: {parentAnchor?.Name}");
                         }
                     }
                 }
 
-                // Method 3: Use the link text as fallback, but clean it up
-                var cleanFallback = Regex.Replace(fallbackName, @"\s*(Watch online|Download|Watch|Online|Subtitles)\s*", "", RegexOptions.IgnoreCase).Trim();
-                Console.WriteLine($"[DEBUG] Using cleaned fallback name: '{cleanFallback}'");
-                return string.IsNullOrEmpty(cleanFallback) ? "Unknown Subtitle" : cleanFallback;
+                Console.WriteLine($"[DEBUG] HTML extraction failed with all patterns, returning Unknown Subtitle");
+                return "Unknown Subtitle";
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[DEBUG] Error extracting subtitle name: {ex.Message}");
-                return fallbackName ?? "Unknown Subtitle";
+                return "Unknown Subtitle";
             }
+        }
+
+        private string CleanSubtitleName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return string.Empty;
+
+            Console.WriteLine($"[DEBUG] CleanSubtitleName - input: '{name}'");
+            
+            // For release names like "Shrek.2.2004.720p.BluRay.x264.YIFY", just return as-is
+            // Only do minimal cleanup
+            var cleaned = name.Trim();
+            
+            // Remove any HTML remnants or problematic chars
+            cleaned = Regex.Replace(cleaned, @"[<>\""]", "");
+            
+            Console.WriteLine($"[DEBUG] CleanSubtitleName - output: '{cleaned}'");
+            return cleaned;
+        }
+
+        private bool IsCommonTableData(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return true;
+                
+            // Check for common table data that's not movie titles
+            var commonPatterns = new[]
+            {
+                @"^\d+$", // just numbers
+                @"^\d{4}-\d{2}-\d{2}$", // dates
+                @"^(English|Spanish|French|German|Italian|Portuguese|Russian|Chinese)$", // languages
+                @"^\d+CD$", // CD count
+                @"^(Download|Watch|Online|Subtitles?)$", // common words
+                @"^\d+\.\d+$", // ratings like 8.5
+                @"^(yes|no|true|false)$" // boolean values
+            };
+            
+            return commonPatterns.Any(pattern => Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase));
         }
 
         private bool IsZipFile(byte[] content)
